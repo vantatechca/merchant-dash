@@ -1,0 +1,13 @@
+{
+  "name": "gmc-dashboard",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n BACKEND,FRONTEND -c blue,green --kill-others-on-fail \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "cd backend && ..\\.venv\\Scripts\\uvicorn app.main:app --reload --port 8001",
+    "dev:frontend": "cd frontend && npm run dev",
+    "setup": "npm install && cd frontend && npm install && cd ..\\backend && ..\\.venv\\Scripts\\pip install -r requirements.txt"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
