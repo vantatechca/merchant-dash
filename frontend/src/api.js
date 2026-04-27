@@ -81,7 +81,7 @@
  * Vite proxies /api/* → http://localhost:8000 (see vite.config.js)
  */
 
-const BASE = '/api';
+const BASE = '';
 
 async function request(path, options = {}) {
   const res = await fetch(`${BASE}${path}`, {
