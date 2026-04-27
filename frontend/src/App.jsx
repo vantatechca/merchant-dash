@@ -1589,9 +1589,6 @@ const refreshAll = useCallback(async () => {
   // Detect new approved/disapproved events and surface them as toasts
 useEffect(() => {
     if (!allEvents || allEvents.length === 0) return;
-
-    // First poll after mount: mark everything as "already seen" so we don't
-    // spam the user with toasts for historical events.
     if (isFirstEventRunRef.current) {
       allEvents.forEach(ev => seenEventIdsRef.current.add(ev.id));
       isFirstEventRunRef.current = false;
@@ -1641,7 +1638,7 @@ useEffect(() => {
     });
   }, [allEvents]);
 
-  
+
 
   const dismissToast = (id) => {
     setToasts(prev => prev.map(x => x.id === id ? { ...x, leaving: true } : x));
