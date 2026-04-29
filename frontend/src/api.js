@@ -81,6 +81,10 @@
  * Vite proxies /api/* → http://localhost:8000 (see vite.config.js)
  */
 
+
+
+
+
 const BASE = '';
 
 async function request(path, options = {}) {
