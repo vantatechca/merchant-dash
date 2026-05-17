@@ -1,14 +1,19 @@
-# """
-# Google Merchant API client (v1beta preferred — v1 requires GCP registration).
 
-# Docs:
-#   https://developers.google.com/merchant/api/guides/products/add-manage
+
+# """
+# Google Merchant API client — auth-agnostic.
+
+# Accepts either:
+#   - Service account credentials (a JSON dict with type='service_account'), OR
+#   - A callable returning a valid OAuth bearer token (e.g. admin OAuth token)
+
+# Same API surface either way — caller doesn't care which auth is in use.
 # """
 
 # from __future__ import annotations
 
 # import logging
-# from typing import Any, Optional
+# from typing import Any, Callable, Optional, Union
 
 # import google.auth.transport.requests as gauth_requests
 # import requests
@@ -19,10 +24,12 @@
 # BASE = "https://merchantapi.googleapis.com"
 # SCOPES = ["https://www.googleapis.com/auth/content"]
 
-# # Use v1beta everywhere to avoid the "GCP project not registered" wall.
-# # v1 is stricter: every call requires the GCP project to be pre-registered with MC.
-# # v1beta is still live and has the same shape, but doesn't enforce that check.
+# # v1beta was shut down Feb 28, 2026 — v1 is the only supported version now.
+# # v1 requires GCP registration per MC account (see google_auth.register_gcp_for_account).
 # API_VERSION = "v1"
+
+# # Type alias: either a callable that returns a fresh bearer token, or raw creds
+# TokenProvider = Callable[[], str]
 
 
 # class GMCError(Exception):
@@ -37,23 +44,54 @@
 
 
 # class GMCClient:
-#     def __init__(self, credentials_json: dict):
-#         try:
-#             self.creds = service_account.Credentials.from_service_account_info(
-#                 credentials_json, scopes=SCOPES
-#             )
-#         except Exception as e:
+#     def __init__(
+#         self,
+#         credentials_json: Optional[dict] = None,
+#         token_provider: Optional[TokenProvider] = None,
+#     ):
+#         """
+#         Pass exactly one of:
+#           - credentials_json: service account key dict
+#           - token_provider:   callable returning a valid OAuth access token
+#         """
+#         if bool(credentials_json) == bool(token_provider):
 #             raise GMCError(
-#                 400, "INVALID_CREDENTIALS",
-#                 f"Credentials JSON is not a valid service account key: {e}",
+#                 400, "INVALID_AUTH",
+#                 "GMCClient requires exactly one of credentials_json or token_provider",
 #             )
+
+#         self._sa_creds = None
+#         self._token_provider = token_provider
+
+#         if credentials_json is not None:
+#             try:
+#                 self._sa_creds = service_account.Credentials.from_service_account_info(
+#                     credentials_json, scopes=SCOPES
+#                 )
+#             except Exception as e:
+#                 raise GMCError(
+#                     400, "INVALID_CREDENTIALS",
+#                     f"Credentials JSON is not a valid service account key: {e}",
+#                 )
+
+#     @classmethod
+#     def from_service_account(cls, credentials_json: dict) -> "GMCClient":
+#         return cls(credentials_json=credentials_json)
+
+#     @classmethod
+#     def from_token_provider(cls, token_provider: TokenProvider) -> "GMCClient":
+#         """Use with the admin OAuth token — pass a callable that returns a fresh token."""
+#         return cls(token_provider=token_provider)
 
 #     # ---- internals ----
 
 #     def _token(self) -> str:
-#         if not self.creds.valid:
-#             self.creds.refresh(gauth_requests.Request())
-#         return self.creds.token
+#         if self._token_provider is not None:
+#             return self._token_provider()
+#         # Service account path
+#         if not self._sa_creds.valid:
+#             self._sa_creds.refresh(gauth_requests.Request())
+#         return self._sa_creds.token
 
 #     def _headers(self) -> dict:
 #         return {
@@ -83,6 +121,15 @@
 #     def get_account(self, account_id: str) -> dict:
 #         return self._request(
 #             "GET", f"{BASE}/accounts/{API_VERSION}/accounts/{account_id}"
+#         )
+
+#     def list_accounts(self, page_token: str | None = None, page_size: int = 250) -> dict:
+#         """List all accounts accessible to this auth. Only works with OAuth, not SA."""
+#         params = {"pageSize": page_size}
+#         if page_token:
+#             params["pageToken"] = page_token
+#         return self._request(
+#             "GET", f"{BASE}/accounts/{API_VERSION}/accounts", params=params
 #         )
 
 #     def list_sub_accounts(self, advanced_account_id: str) -> dict:
@@ -223,6 +270,21 @@
 #             )
 #         }
 #         return self._request("POST", url, json=body)
+
+#     # ---- Health check ----
+
+#     def can_read_account(self, account_id: str) -> tuple[bool, str]:
+#         """
+#         Lightweight test: can this client actually read this account?
+#         Returns (ok, reason). Used by the audit endpoint.
+#         """
+#         try:
+#             self.get_account(account_id)
+#             return True, "ok"
+#         except GMCError as e:
+#             return False, f"{e.code}: {e.message[:100]}"
+
+
 
 
 
@@ -367,6 +429,77 @@ class GMCClient:
             )
         except GMCError:
             return {"accounts": []}
+
+    # ---- User management (People & access) ----
+
+    def delete_user_me(self, account_id: str) -> None:
+        """
+        Remove the currently-authenticated identity from this GMC account's
+        People & access list.
+
+        This is the call that actually FREES a slot on the admin Gmail's
+        100-account limit. Revoking OAuth alone does not free a slot —
+        the Gmail's membership in the GMC account persists in People &
+        access until explicitly removed via this endpoint.
+
+        Behavior by auth_type:
+          - admin OAuth (token_provider) → removes the Gmail that authorized
+          - service account (credentials_json) → removes the SA email
+            (xxx@yyy.iam.gserviceaccount.com)
+
+        Special handling:
+          - 404 is treated as success (user already not on the account —
+            the desired end state already holds).
+
+        Raises GMCError on other non-2xx responses. Callers should match
+        the error message to surface useful reasons to the UI:
+          - 'sole admin' / 'last admin' / 'cannot remove the last' →
+            this Gmail is the only admin; cannot self-remove
+          - 'business manager' / 'managed by' →
+            Business Manager owns the user; remove there instead
+        """
+        url = f"{BASE}/accounts/{API_VERSION}/accounts/{account_id}/users/me"
+        try:
+            self._request("DELETE", url)
+            log.info(f"[gmc:{account_id}] users.delete(me) succeeded — slot freed")
+        except GMCError as e:
+            if e.status == 404:
+                log.info(
+                    f"[gmc:{account_id}] users.delete(me) returned 404 — "
+                    "user already not on account, treating as success"
+                )
+                return
+            raise
+
+    def delete_user(self, account_id: str, email: str) -> None:
+        """
+        Remove a SPECIFIC user (by email) from this GMC account's People &
+        access. Use this when you have admin access to the account and
+        want to remove someone other than yourself — e.g. rotating out
+        a stale admin Gmail across the fleet.
+
+        Same 404-as-success semantics as delete_user_me.
+        """
+        url = f"{BASE}/accounts/{API_VERSION}/accounts/{account_id}/users/{email}"
+        try:
+            self._request("DELETE", url)
+            log.info(f"[gmc:{account_id}] users.delete({email}) succeeded")
+        except GMCError as e:
+            if e.status == 404:
+                log.info(
+                    f"[gmc:{account_id}] users.delete({email}) returned 404 — "
+                    "user already not on account, treating as success"
+                )
+                return
+            raise
+
+    def list_users(self, account_id: str) -> dict:
+        """List all users on a GMC account's People & access. Useful for
+        auditing slot usage and confirming who's currently linked."""
+        return self._request(
+            "GET",
+            f"{BASE}/accounts/{API_VERSION}/accounts/{account_id}/users",
+        )
 
     # ---- Data sources ----
 

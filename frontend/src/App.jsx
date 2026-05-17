@@ -1,10 +1,12 @@
+
+
 // import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 // import {
 //   CheckCircle2, Clock, XCircle, AlertTriangle, RefreshCw,
 //   Search, Plus, ArrowRight, ArrowLeft,
-//   Box, Radio, Settings, Link2, ServerCrash, Loader2, Database,
-//   ChevronRight, Building2, Bell, BellOff, Command, X,
-//   Zap, ZapOff,
+//   Box, Radio, Link2, ServerCrash, Loader2, Database,
+//   ChevronRight, Building2, Bell, BellOff, X,
+//   Zap, ZapOff, LogOut,
 // } from 'lucide-react';
 
 // import { api } from './api';
@@ -64,6 +66,12 @@
 //       .toast-in { animation: toast-in 0.32s cubic-bezier(.16,1,.3,1); }
 //       .toast-out { animation: toast-out 0.28s cubic-bezier(.4,0,1,1) forwards; overflow: hidden; }
 
+//       @keyframes menu-in {
+//         from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+//         to { opacity: 1; transform: translateY(0) scale(1); }
+//       }
+//       .menu-in { animation: menu-in 0.16s cubic-bezier(.16,1,.3,1); transform-origin: top right; }
+
 //       .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
 //       .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
 //       .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
@@ -82,7 +90,7 @@
 // // ═══════════════════════════════════════════════════════════════════════════
 // // Root
 // // ═══════════════════════════════════════════════════════════════════════════
-// export default function App() {
+// export default function App({ user, onSignOut }) {
 //   const [selectedAccount, setSelectedAccount] = useState(null);
 //   const [statusFilter, setStatusFilter] = useState('all');
 //   const [search, setSearch] = useState('');
@@ -121,6 +129,7 @@
 //   const { data: products, refresh: refreshProducts } = useProducts(selectedAccount || 'all', statusFilter);
 //   const { data: stats, refresh: refreshStats } = useStats(selectedAccount || 'all');
 //   const { events } = useEvents(selectedAccount || 'all');
+//   const { events: allEvents } = useEvents('all');
 
 // const refreshAll = useCallback(async () => {
 //     if (refreshBusyRef.current) return;
@@ -238,18 +247,15 @@
 //   }, [accounts, refreshAccounts, refreshProducts, refreshStats]);
 
 //   // Detect new approved/disapproved events and surface them as toasts
-//   useEffect(() => {
-//     if (!events || events.length === 0) return;
-
-//     // First poll after mount: mark everything as "already seen" so we don't
-//     // spam the user with toasts for historical events.
+// useEffect(() => {
+//     if (!allEvents || allEvents.length === 0) return;
 //     if (isFirstEventRunRef.current) {
-//       events.forEach(ev => seenEventIdsRef.current.add(ev.id));
+//       allEvents.forEach(ev => seenEventIdsRef.current.add(ev.id));
 //       isFirstEventRunRef.current = false;
 //       return;
 //     }
 
-//     const newOnes = events.filter(ev => ev.id && !seenEventIdsRef.current.has(ev.id));
+//     const newOnes = allEvents.filter(ev => ev.id && !seenEventIdsRef.current.has(ev.id));
 //     if (newOnes.length === 0) return;
 
 //     const incoming = [];
@@ -290,7 +296,9 @@
 //         }, 280);
 //       }, 8000);
 //     });
-//   }, [events]);
+//   }, [allEvents]);
+
+
 
 //   const dismissToast = (id) => {
 //     setToasts(prev => prev.map(x => x.id === id ? { ...x, leaving: true } : x));
@@ -411,7 +419,14 @@
 //       <>
 //         <GlobalStyles />
 //         <div className="min-h-screen bg-slate-50">
-//           <Header events={events} onSync={handleSync} syncing={syncing} showSync={false} />
+//           <Header
+//             events={events}
+//             onSync={handleSync}
+//             syncing={syncing}
+//             showSync={false}
+//             user={user}
+//             onSignOut={onSignOut}
+//           />
 //           <div className="relative flex items-center justify-center px-8 py-24 overflow-hidden">
 //             <div className="absolute inset-0 grid-bg opacity-60 pointer-events-none" />
 //             <div className="relative max-w-lg text-center">
@@ -458,6 +473,8 @@
 //           onToggleAutoSync={() => setAutoSync(v => !v)}
 //           autoSyncState={autoSyncState}
 //           lastSyncAt={lastSyncAt}
+//           user={user}
+//           onSignOut={onSignOut}
 //         />
 
 //         <div className="flex-1">
@@ -563,9 +580,6 @@
 //             <h1 className="font-display text-[44px] leading-[1.1] text-slate-900 mt-4">
 //               Merchant accounts
 //             </h1>
-//             <p className="text-slate-600 text-base mt-3 max-w-xl">
-//               {totals.total.toLocaleString()} products across {accounts?.length ?? 0} linked {accounts?.length === 1 ? 'account' : 'accounts'}. Select one to drill into its inventory.
-//             </p>
 //           </div>
 
 //           <button
@@ -839,13 +853,6 @@
 //                   ? <><Loader2 className="w-4 h-4 animate-spin" /> Syncing…</>
 //                   : <><RefreshCw className="w-4 h-4" /> Sync now</>}
 //               </button>
-//               <button
-//                 onClick={() => alert('Insert product — wire to POST /api/products. Pick a data source first via GET /api/accounts/{id}/datasources.')}
-//                 className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 text-sm font-semibold hover:bg-indigo-700 transition rounded-lg shadow-sm shadow-indigo-600/20"
-//               >
-//                 <Plus className="w-4 h-4" />
-//                 Insert product
-//               </button>
 //             </div>
 //           </div>
 //         </div>
@@ -955,7 +962,7 @@
 //                   {!rawProductsLoaded ? 'Loading…' : 'No products yet'}
 //                 </div>
 //                 <div className="text-sm text-slate-500 max-w-sm mx-auto">
-//                   Run <button onClick={onSync} className="text-indigo-600 font-medium hover:text-indigo-700">sync</button> to pull products from this account, or add your first product.
+//                   Run <button onClick={onSync} className="text-indigo-600 font-medium hover:text-indigo-700">sync</button> to pull products from this account.
 //                 </div>
 //               </div>
 //             )}
@@ -991,39 +998,23 @@
 // function Header({
 //   events, onSync, syncing, showSync, notifEnabled, onToggleNotifications,
 //   autoSync, onToggleAutoSync, autoSyncState, lastSyncAt,
+//   user, onSignOut,
 // }) {
 //   return (
 //     <header className="border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-40">
 //       <div className="flex items-center justify-between px-8 h-16">
-//         <div className="flex items-center gap-8">
-//           <div className="flex items-center gap-2.5">
-//             <div className="relative w-8 h-8 bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-lg flex items-center justify-center shadow-sm shadow-indigo-600/20">
-//               <div className="w-2.5 h-2.5 bg-white rounded-sm" />
-//               <div className="absolute -right-0.5 -top-0.5 w-2 h-2 bg-amber-400 rounded-full ring-2 ring-white" />
-//             </div>
-//             <div className="flex flex-col leading-tight">
-//               <span className="font-display text-[15px] text-slate-900">Merchant</span>
-//               <span className="font-mono-ui text-[9px] tracking-wider text-slate-400 uppercase -mt-0.5">Control · v1.0</span>
-//             </div>
+//         <div className="flex items-center gap-2.5">
+//           <div className="relative w-8 h-8 bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-lg flex items-center justify-center shadow-sm shadow-indigo-600/20">
+//             <div className="w-2.5 h-2.5 bg-white rounded-sm" />
+//             <div className="absolute -right-0.5 -top-0.5 w-2 h-2 bg-amber-400 rounded-full ring-2 ring-white" />
 //           </div>
-//           <nav className="flex items-center gap-1 text-sm">
-//             <NavLink active>Products</NavLink>
-//             <NavLink>Issues</NavLink>
-//             <NavLink>Feeds</NavLink>
-//             <NavLink>Webhooks</NavLink>
-//             <NavLink>Reports</NavLink>
-//           </nav>
+//           <div className="flex flex-col leading-tight">
+//             <span className="font-display text-[15px] text-slate-900">Merchant</span>
+//             <span className="font-mono-ui text-[9px] tracking-wider text-slate-400 uppercase -mt-0.5">Control · v1.0</span>
+//           </div>
 //         </div>
 
 //         <div className="flex items-center gap-2">
-//           <button className="hidden md:flex items-center gap-2 px-3 py-1.5 border border-slate-200 bg-slate-50 hover:bg-white transition rounded-lg text-sm text-slate-500">
-//             <Search className="w-3.5 h-3.5" />
-//             <span className="text-xs">Search…</span>
-//             <kbd className="font-mono-ui text-[10px] px-1.5 py-0.5 bg-white border border-slate-200 rounded text-slate-500 flex items-center gap-0.5">
-//               <Command className="w-2.5 h-2.5" />K
-//             </kbd>
-//           </button>
-
 //           {/* Autosync indicator / toggle */}
 //           {autoSync !== undefined && (
 //             <AutoSyncPill
@@ -1067,12 +1058,99 @@
 //               <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white" />
 //             )}
 //           </button>
-//           <button className="w-9 h-9 flex items-center justify-center border border-slate-200 bg-white hover:bg-slate-50 rounded-lg transition">
-//             <Settings className="w-4 h-4 text-slate-600" />
-//           </button>
+
+//           <UserMenu user={user} onSignOut={onSignOut} />
 //         </div>
 //       </div>
 //     </header>
+//   );
+// }
+
+// function UserMenu({ user, onSignOut }) {
+//   const [open, setOpen] = useState(false);
+//   const [signingOut, setSigningOut] = useState(false);
+//   const menuRef = useRef(null);
+
+//   useEffect(() => {
+//     if (!open) return;
+//     const onClick = (e) => {
+//       if (menuRef.current && !menuRef.current.contains(e.target)) {
+//         setOpen(false);
+//       }
+//     };
+//     const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+//     document.addEventListener('mousedown', onClick);
+//     document.addEventListener('keydown', onKey);
+//     return () => {
+//       document.removeEventListener('mousedown', onClick);
+//       document.removeEventListener('keydown', onKey);
+//     };
+//   }, [open]);
+
+//   const handleSignOut = async () => {
+//     if (!onSignOut) return;
+//     setSigningOut(true);
+//     try {
+//       await onSignOut();
+//     } catch (e) {
+//       console.error('[signout] failed:', e);
+//       setSigningOut(false);
+//       setOpen(false);
+//     }
+//     // On success, AuthGate swaps to <Login />, so we don't reset state here.
+//   };
+
+//   const initial = (user?.display_name || user?.email || '?').trim()[0]?.toUpperCase() || '?';
+//   const name = user?.display_name || user?.email?.split('@')[0] || 'User';
+
+//   return (
+//     <div className="relative" ref={menuRef}>
+//       <button
+//         onClick={() => setOpen(v => !v)}
+//         className={`w-9 h-9 flex items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-indigo-700 text-white font-semibold text-sm shadow-sm shadow-indigo-600/20 hover:shadow-md transition ${
+//           open ? 'ring-2 ring-indigo-500/30' : ''
+//         }`}
+//         aria-label="User menu"
+//         aria-expanded={open}
+//       >
+//         {initial}
+//       </button>
+
+//       {open && (
+//         <div className="menu-in absolute right-0 top-full mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-lg shadow-slate-900/10 overflow-hidden z-50">
+//           <div className="px-4 py-3 border-b border-slate-100">
+//             <div className="font-mono-ui text-[9px] tracking-wider text-slate-400 uppercase mb-1.5">
+//               Signed in as
+//             </div>
+//             <div className="font-semibold text-sm text-slate-900 truncate">{name}</div>
+//             {user?.email && (
+//               <div className="font-mono-ui text-[11px] text-slate-500 mt-0.5 truncate">
+//                 {user.email}
+//               </div>
+//             )}
+//           </div>
+//           <div className="py-1">
+//             <button
+//               onClick={handleSignOut}
+//               disabled={signingOut}
+//               className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
+//             >
+//               {signingOut ? (
+//                 <>
+//                   <Loader2 className="w-4 h-4 animate-spin" />
+//                   Signing out…
+//                 </>
+//               ) : (
+//                 <>
+//                   <LogOut className="w-4 h-4" />
+//                   Sign out
+//                 </>
+//               )}
+//             </button>
+//           </div>
+//         </div>
+//       )}
+//     </div>
 //   );
 // }
 
@@ -1170,16 +1248,6 @@
 //         UTC {new Date().toISOString().slice(11, 19)}
 //       </div>
 //     </footer>
-//   );
-// }
-
-// function NavLink({ children, active }) {
-//   return (
-//     <button className={`relative px-3 py-1.5 text-sm rounded-md transition font-medium ${
-//       active ? 'text-slate-900 bg-slate-100' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-//     }`}>
-//       {children}
-//     </button>
 //   );
 // }
 
@@ -1339,14 +1407,13 @@
 
 
 
-
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
   CheckCircle2, Clock, XCircle, AlertTriangle, RefreshCw,
   Search, Plus, ArrowRight, ArrowLeft,
   Box, Radio, Link2, ServerCrash, Loader2, Database,
   ChevronRight, Building2, Bell, BellOff, X,
-  Zap, ZapOff, LogOut,
+  Zap, ZapOff, LogOut, Trash2, ExternalLink,
 } from 'lucide-react';
 
 import { api } from './api';
@@ -1412,6 +1479,17 @@ function GlobalStyles() {
       }
       .menu-in { animation: menu-in 0.16s cubic-bezier(.16,1,.3,1); transform-origin: top right; }
 
+      @keyframes modal-in {
+        from { opacity: 0; transform: translateY(8px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @keyframes backdrop-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      .modal-in { animation: modal-in 0.2s cubic-bezier(.16,1,.3,1); }
+      .backdrop-in { animation: backdrop-in 0.18s ease-out; }
+
       .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
       .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
       .scrollbar-thin::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
@@ -1471,7 +1549,7 @@ export default function App({ user, onSignOut }) {
   const { events } = useEvents(selectedAccount || 'all');
   const { events: allEvents } = useEvents('all');
 
-const refreshAll = useCallback(async () => {
+  const refreshAll = useCallback(async () => {
     if (refreshBusyRef.current) return;
     refreshBusyRef.current = true;
     // Silent refresh — don't touch autoSyncState so the header pill doesn't flicker.
@@ -1486,7 +1564,6 @@ const refreshAll = useCallback(async () => {
       refreshBusyRef.current = false;
     }
   }, [selectedAccount, refreshProducts, refreshStats, refreshAccounts]);
-
 
   // ── Fast DB poll: every FAST_REFRESH_MS, pause when tab hidden ──────────
   useEffect(() => {
@@ -1548,7 +1625,7 @@ const refreshAll = useCallback(async () => {
     }
   }, [events, refreshAll]);
 
-    const seenAccountIdsRef = useRef(null);
+  const seenAccountIdsRef = useRef(null);
   useEffect(() => {
     if (!accounts) return;
 
@@ -1587,7 +1664,7 @@ const refreshAll = useCallback(async () => {
   }, [accounts, refreshAccounts, refreshProducts, refreshStats]);
 
   // Detect new approved/disapproved events and surface them as toasts
-useEffect(() => {
+  useEffect(() => {
     if (!allEvents || allEvents.length === 0) return;
     if (isFirstEventRunRef.current) {
       allEvents.forEach(ev => seenEventIdsRef.current.add(ev.id));
@@ -1638,8 +1715,6 @@ useEffect(() => {
     });
   }, [allEvents]);
 
-
-
   const dismissToast = (id) => {
     setToasts(prev => prev.map(x => x.id === id ? { ...x, leaving: true } : x));
     setTimeout(() => {
@@ -1660,6 +1735,15 @@ useEffect(() => {
     const perm = await Notification.requestPermission();
     setNotifEnabled(perm === 'granted');
   };
+
+  // ── After a successful account delete: drop from seen-set so a future
+  // re-connect of the same account_id triggers an initial sync again.
+  const handleAccountDeleted = useCallback(async (deletedAccountId) => {
+    if (seenAccountIdsRef.current && deletedAccountId) {
+      seenAccountIdsRef.current.delete(deletedAccountId);
+    }
+    await Promise.all([refreshAccounts(), refreshStats(), refreshProducts()]);
+  }, [refreshAccounts, refreshStats, refreshProducts]);
 
   const hasAccounts = accounts && accounts.length > 0;
   const activeAccount = accounts?.find(a => a.account_id === selectedAccount);
@@ -1683,7 +1767,7 @@ useEffect(() => {
     return result;
   }, [products, search, selectedAccount]);
 
-const handleSync = async () => {
+  const handleSync = async () => {
     if (!selectedAccount) return;
     setSyncing(true);
     setAutoSyncState('syncing');
@@ -1833,6 +1917,13 @@ const handleSync = async () => {
               onBack={() => { setSelectedAccount(null); setSearch(''); setStatusFilter('all'); }}
               onSync={handleSync}
               syncing={syncing}
+              onAccountDeleted={async (id) => {
+                await handleAccountDeleted(id);
+                // Bounce back to the accounts list since we just deleted the one we were viewing.
+                setSelectedAccount(null);
+                setSearch('');
+                setStatusFilter('all');
+              }}
             />
           ) : (
             <AccountsView
@@ -1842,6 +1933,7 @@ const handleSync = async () => {
               events={events}
               onSelect={setSelectedAccount}
               onConnect={() => setShowConnect(true)}
+              onAccountDeleted={handleAccountDeleted}
             />
           )}
         </div>
@@ -1861,10 +1953,13 @@ const handleSync = async () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // Accounts view
 // ═══════════════════════════════════════════════════════════════════════════
-function AccountsView({ accounts, totals, approvalRate, events, onSelect, onConnect }) {
+function AccountsView({ accounts, totals, approvalRate, events, onSelect, onConnect, onAccountDeleted }) {
   // Local search + status filter for the accounts table.
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Delete & unlink state
+  const [accountToDelete, setAccountToDelete] = useState(null);
 
   const accountStats = useMemo(() => {
     const list = accounts ?? [];
@@ -2088,11 +2183,22 @@ function AccountsView({ accounts, totals, approvalRate, events, onSelect, onConn
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-3">
+                      <div className="flex items-center justify-end gap-2">
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-slate-200 bg-slate-50 text-slate-600 text-[11px] font-semibold rounded-full">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           Connected
                         </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAccountToDelete(a);
+                          }}
+                          title="Delete & unlink account"
+                          aria-label={`Delete and unlink ${a.display_name}`}
+                          className="opacity-0 group-hover:opacity-100 focus:opacity-100 w-7 h-7 flex items-center justify-center rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                         <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition" />
                       </div>
                     </td>
@@ -2141,6 +2247,17 @@ function AccountsView({ accounts, totals, approvalRate, events, onSelect, onConn
           <EventsTable events={events.slice(0, 8)} />
         </section>
       )}
+
+      {accountToDelete && (
+        <DeleteAccountModal
+          account={accountToDelete}
+          onClose={() => setAccountToDelete(null)}
+          onDeleted={async (id) => {
+            setAccountToDelete(null);
+            await onAccountDeleted?.(id);
+          }}
+        />
+      )}
     </>
   );
 }
@@ -2151,8 +2268,10 @@ function AccountsView({ accounts, totals, approvalRate, events, onSelect, onConn
 function ProductsView({
   account, products, rawProductsLoaded, totals, approvalRate,
   search, setSearch, statusFilter, setStatusFilter,
-  events, onBack, onSync, syncing,
+  events, onBack, onSync, syncing, onAccountDeleted,
 }) {
+  const [showDelete, setShowDelete] = useState(false);
+
   return (
     <>
       {/* Hero */}
@@ -2184,6 +2303,14 @@ function ProductsView({
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowDelete(true)}
+                className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 bg-white hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700 text-sm font-medium text-slate-700 transition rounded-lg shadow-sm"
+                title="Delete & unlink this account"
+              >
+                <Trash2 className="w-4 h-4" />
+                Disconnect
+              </button>
               <button
                 onClick={onSync}
                 disabled={syncing}
@@ -2328,7 +2455,230 @@ function ProductsView({
           <EventsTable events={events.slice(0, 12)} showContext />
         </section>
       )}
+
+      {showDelete && (
+        <DeleteAccountModal
+          account={account}
+          onClose={() => setShowDelete(false)}
+          onDeleted={async (id) => {
+            setShowDelete(false);
+            await onAccountDeleted?.(id);
+          }}
+        />
+      )}
     </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Delete & unlink modal
+// ═══════════════════════════════════════════════════════════════════════════
+function DeleteAccountModal({ account, onClose, onDeleted }) {
+  const [confirmText, setConfirmText] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState(null);
+  // 'confirm' → 'partial' (deleted but slot not freed) → user closes
+  const [phase, setPhase] = useState('confirm');
+  const [partialReason, setPartialReason] = useState(null);
+
+  const expected = (account?.display_name || account?.account_id || '').trim();
+  const canConfirm = confirmText.trim() === expected && !deleting && phase === 'confirm';
+
+  // Close on Escape (but not while deleting)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !deleting) onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [deleting, onClose]);
+
+  const handleDelete = async () => {
+    if (!canConfirm) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await api.deleteAccount(account.account_id);
+      // Backend contract:
+      //   { ok: true, gmc_user_removed: true } → fully unlinked, slot freed
+      //   { ok: true, gmc_user_removed: false, reason: 'sole_admin' | 'business_manager' | 'api_error' }
+      //     → local DB cleared + OAuth revoked, but the Gmail still occupies a People & access slot on GMC
+      if (res && res.ok && res.gmc_user_removed === false) {
+        setPartialReason(res.reason || 'api_error');
+        setPhase('partial');
+        setDeleting(false);
+        return;
+      }
+      // Fully successful — notify parent
+      await onDeleted?.(account.account_id);
+    } catch (e) {
+      setError(e?.message || 'Failed to delete account.');
+      setDeleting(false);
+    }
+  };
+
+  const handlePartialClose = async () => {
+    // Even on partial success the local record IS deleted on the backend,
+    // so we still need to refresh the parent's accounts list.
+    await onDeleted?.(account.account_id);
+  };
+
+  const gmcUsersUrl = account?.account_id
+    ? `https://merchants.google.com/mc/users?a=${account.account_id}`
+    : 'https://merchants.google.com/';
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 backdrop-in"
+      onClick={() => { if (!deleting) onClose(); }}
+    >
+      <div
+        className="modal-in bg-white rounded-xl shadow-2xl shadow-slate-900/20 max-w-md w-full overflow-hidden border border-slate-200"
+        onClick={e => e.stopPropagation()}
+      >
+        {phase === 'confirm' && (
+          <>
+            <div className="px-6 pt-6 pb-4 border-b border-slate-100">
+              <div className="flex items-start gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="font-display text-lg text-slate-900 leading-tight">Delete &amp; unlink account</h2>
+                  <p className="font-mono-ui text-[10px] tracking-wide text-slate-400 uppercase mt-1">
+                    Permanent · revokes OAuth · frees GMC slot
+                  </p>
+                </div>
+              </div>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                You're about to disconnect <span className="font-semibold text-slate-900">{account?.display_name}</span>{' '}
+                <span className="font-mono-ui text-xs text-slate-500">({account?.account_id})</span>.
+              </p>
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50/60 space-y-2 text-sm text-slate-700">
+              <div className="flex items-start gap-2">
+                <X className="w-4 h-4 text-rose-500 mt-0.5 flex-shrink-0" />
+                <span>Admin Gmail removed from GMC <span className="font-medium text-slate-900">People &amp; access</span> — frees a 100-account slot</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <X className="w-4 h-4 text-rose-500 mt-0.5 flex-shrink-0" />
+                <span>OAuth refresh token revoked — dashboard loses API access immediately</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <X className="w-4 h-4 text-rose-500 mt-0.5 flex-shrink-0" />
+                <span>All synced products and events for this account removed locally</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                <span>Your actual GMC account at merchants.google.com is <b>not</b> deleted</span>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-100">
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                Type{' '}
+                <span className="font-mono-ui text-xs bg-slate-100 px-1.5 py-0.5 rounded text-slate-900">
+                  {expected}
+                </span>{' '}
+                to confirm
+              </label>
+              <input
+                value={confirmText}
+                onChange={e => setConfirmText(e.target.value)}
+                placeholder={expected}
+                autoFocus
+                disabled={deleting}
+                onKeyDown={e => { if (e.key === 'Enter' && canConfirm) handleDelete(); }}
+                className="w-full bg-white border border-slate-200 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 rounded-lg transition font-mono-ui"
+              />
+              {error && (
+                <div className="mt-2 flex items-start gap-1.5 text-xs text-rose-600">
+                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                onClick={onClose}
+                disabled={deleting}
+                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={!canConfirm}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 text-white text-sm font-semibold rounded-lg hover:bg-rose-700 transition shadow-sm shadow-rose-600/20 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {deleting
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Deleting…</>
+                  : <><Trash2 className="w-4 h-4" /> Delete &amp; unlink</>}
+              </button>
+            </div>
+          </>
+        )}
+
+        {phase === 'partial' && (
+          <>
+            <div className="px-6 pt-6 pb-4 border-b border-slate-100">
+              <div className="flex items-start gap-3 mb-3">
+                <div className="w-10 h-10 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="font-display text-lg text-slate-900 leading-tight">Disconnected — but slot wasn't freed</h2>
+                  <p className="font-mono-ui text-[10px] tracking-wide text-slate-400 uppercase mt-1">
+                    Partial success · manual step required
+                  </p>
+                </div>
+              </div>
+              <p className="text-sm text-slate-600 leading-relaxed">
+                Local records were removed and OAuth was revoked, but the admin Gmail still appears in
+                People &amp; access on the GMC account — meaning it still counts toward the 100-account limit.
+              </p>
+            </div>
+
+            <div className="px-6 py-4 bg-amber-50/60 border-y border-amber-100">
+              <div className="font-mono-ui text-[10px] tracking-wider text-amber-700 uppercase font-semibold mb-1.5">
+                Reason
+              </div>
+              <p className="text-sm text-slate-700 leading-relaxed">
+                {partialReason === 'sole_admin' && (
+                  <>The Gmail is the <b>only admin</b> on this GMC account, so Google won't let it be removed. Add a second admin first, then retry from the GMC People &amp; access page.</>
+                )}
+                {partialReason === 'business_manager' && (
+                  <>The user is <b>managed by Business Manager</b> and can't be removed via API. Remove it from Business Manager, or from People &amp; access manually.</>
+                )}
+                {(!partialReason || partialReason === 'api_error') && (
+                  <>The Merchant API call to remove the user failed. Open People &amp; access on GMC and remove the admin Gmail manually to free the slot.</>
+                )}
+              </p>
+            </div>
+
+            <div className="px-6 py-4 bg-slate-50 flex items-center justify-end gap-2">
+              <a
+                href={gmcUsersUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded-lg transition"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Open GMC People &amp; access
+              </a>
+              <button
+                onClick={handlePartialClose}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-800 transition shadow-sm"
+              >
+                Got it
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 
