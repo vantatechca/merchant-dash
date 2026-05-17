@@ -724,7 +724,7 @@ app = FastAPI(title="GMC Dashboard API", version="1.0.0", lifespan=lifespan)
 # JSON (or as a webhook target) is registered against `api`, not `app`,
 # so it automatically gets the /api prefix. Only the SPA catch-all stays
 # on the bare `app`.
-api = APIRouter(prefix="/api")
+api = APIRouter()
 
 # CORS
 _origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
