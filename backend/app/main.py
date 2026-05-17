@@ -661,9 +661,11 @@
 """
 GMC Dashboard — FastAPI backend (with OAuth support + debug logging)
 
-URL convention: ALL API routes are mounted under /api. SPA assets and
-catch-all live at the root. This makes dev (Vite proxy) and prod (FastAPI
-serves both API and SPA) behave identically — same URL paths everywhere.
+URL convention: all API routes are served at the root (no /api prefix).
+This matches the existing frontend, which uses bare paths like
+/auth/login, /accounts, /oauth/admin/status. The SPA catch-all only
+matches GET requests, so any unknown POST falls through and 405s
+cleanly instead of being silently swallowed by index.html.
 """
 
 from __future__ import annotations
@@ -720,10 +722,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="GMC Dashboard API", version="1.0.0", lifespan=lifespan)
 
-# All API routes hang off this router. Anything served to the browser as
-# JSON (or as a webhook target) is registered against `api`, not `app`,
-# so it automatically gets the /api prefix. Only the SPA catch-all stays
-# on the bare `app`.
+# Local APIRouter used as a convenience grouping for all the routes that
+# would otherwise hang off `@app.*`. Mounted at the root (no prefix) so
+# paths defined below resolve exactly as written: @api.get("/accounts")
+# → GET /accounts.
 api = APIRouter()
 
 # CORS
@@ -1356,9 +1358,9 @@ async def list_subscriptions(account_id: str, session: AsyncSession = Depends(ge
 @api.post("/webhooks/gmc")
 async def gmc_webhook(request: Request, session: AsyncSession = Depends(get_session)):
     """
-    GMC Pub/Sub push target. NOTE: when you change this prefix, you must
-    also update the Pub/Sub subscription's pushEndpoint URL in GCP to
-    the new path (e.g. https://yourdomain.com/api/webhooks/gmc).
+    GMC Pub/Sub push target. NOTE: this URL is configured in GCP Pub/Sub
+    as the subscription's pushEndpoint. If you ever change this path,
+    update the subscription in GCP Console too.
     """
     envelope = await request.json()
     msg = envelope.get("message") or {}
@@ -1434,25 +1436,23 @@ async def health():
 
 
 # ─── Mount routers ───────────────────────────────────────────────────────────
-# Order matters: routers are matched in registration order. Sub-routers
-# all get the /api prefix so their internal paths (e.g. /oauth/start,
-# /auth/login) become /api/oauth/start, /api/auth/login.
+# All API routes are mounted at the root — no /api prefix. This matches
+# the existing frontend, which uses bare paths everywhere (/auth/login,
+# /oauth/start, /accounts, etc.).
 #
-# CRITICAL: when you change this prefix, you MUST update the redirect
-# URIs registered in Google Cloud Console for both OAuth clients
-# (user-auth + MC admin), or OAuth callbacks will 404.
+# Order matters: API routes are registered BEFORE the SPA catch-all so
+# they're matched first.
 
-app.include_router(oauth_router,       prefix="/api")
-app.include_router(admin_router,       prefix="/api")
-app.include_router(admin_oauth_router, prefix="/api")  # /api/oauth/admin/*
-app.include_router(auth_router,        prefix="/api")  # /api/auth/login, ...
-app.include_router(api)                                 # all the @api.* routes
+app.include_router(oauth_router)        # /oauth/start, /oauth/callback, ...
+app.include_router(admin_router)
+app.include_router(admin_oauth_router)  # /oauth/admin/*
+app.include_router(auth_router)         # /auth/login, /auth/me, /auth/google, ...
+app.include_router(api)                 # all the @api.* routes above
 
 
 # ─── SPA static + catch-all ──────────────────────────────────────────────────
-# Stays on `app` (NOT under /api). Matches anything that isn't an API
-# route or a real file under /assets — falls back to index.html so React
-# Router can handle the path client-side.
+# Stays on `app`, not under any API prefix. Only matches GET — so unknown
+# POSTs to non-existent routes return a clean 405 instead of being swallowed.
 
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
@@ -1470,9 +1470,9 @@ if FRONTEND_DIST.exists():
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
-        # API routes are matched before this (they were registered first),
-        # so anything that reaches here is either a static asset in dist/
-        # or an SPA route React Router should handle.
+        # API routes are matched before this (registered first), so
+        # anything reaching here is either a real file under dist/ or an
+        # SPA route React Router should handle.
         candidate = FRONTEND_DIST / full_path
         if full_path and candidate.is_file():
             return FileResponse(candidate)
